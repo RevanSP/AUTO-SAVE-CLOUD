@@ -1,0 +1,7 @@
+{
+  "name": "automatic-push",
+  "private": true,
+  "dependencies": {
+    "chokidar": "^4.0.3"
+  }
+}
