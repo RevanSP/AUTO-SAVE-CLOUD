@@ -154,26 +154,40 @@ async function gitPush() {
       }
     }
 
-    // Check if there are actually changes to commit
+    // Force commit even if Git thinks there are no changes
     try {
       const statusOutput = await executeCommand(
         "git status --porcelain",
         WATCH_FOLDER
       );
       if (!statusOutput.trim()) {
-        console.log("ℹ️ No changes to commit");
-        return;
+        console.log("ℹ️ Git reports no changes, but forcing commit anyway...");
+        // Force add the file again to ensure it's staged
+        for (const file of existingFiles) {
+          const fullPath = path.join(WATCH_FOLDER, file);
+          await executeCommand(`git add -f "${fullPath}"`, WATCH_FOLDER);
+        }
       }
     } catch (statusError) {
       console.error(`❌ Error checking Git status: ${statusError.message}`);
     }
 
-    // Commit changes
+    // Commit changes (force commit with --allow-empty if needed)
     const commitMessage = `Update saves: ${existingFiles.join(
       ", "
     )} - ${new Date().toISOString()}`;
     console.log(`📝 Committing with message: "${commitMessage}"`);
-    await executeCommand(`git commit -m "${commitMessage}"`, WATCH_FOLDER);
+    
+    try {
+      await executeCommand(`git commit -m "${commitMessage}"`, WATCH_FOLDER);
+    } catch (commitError) {
+      if (commitError.message.includes("nothing to commit")) {
+        console.log("🔄 No changes detected, creating empty commit to trigger push...");
+        await executeCommand(`git commit --allow-empty -m "${commitMessage}"`, WATCH_FOLDER);
+      } else {
+        throw commitError;
+      }
+    }
 
     // Push to remote
     console.log("🚀 Pushing to origin/main...");
