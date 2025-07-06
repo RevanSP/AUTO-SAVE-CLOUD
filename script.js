@@ -54,7 +54,6 @@ async function lightweightGitCleanup() {
   console.log("🧹 Performing lightweight Git cleanup...");
   const lockFile = path.join(WATCH_FOLDER, ".git", "index.lock");
 
-  // Remove lock file if it exists
   if (fs.existsSync(lockFile)) {
     try {
       fs.unlinkSync(lockFile);
@@ -65,12 +64,10 @@ async function lightweightGitCleanup() {
   }
 
   try {
-    // Just pull latest changes without aggressive reset
     await executeCommand("git pull origin main", WATCH_FOLDER);
     console.log("✅ Git updated from remote");
   } catch (error) {
     console.warn(`⚠️ Git pull failed: ${error.message}`);
-    // Don't fail completely, just continue
   }
 }
 
@@ -85,24 +82,21 @@ async function verifyFileExists(filePath) {
 
 async function waitForFileRelease(filePath, maxWaitTime = 10000) {
   const startTime = Date.now();
-  
+
   while (Date.now() - startTime < maxWaitTime) {
     try {
-      // Try to open the file for writing to check if it's locked
-      const fd = await fs.promises.open(filePath, 'r+');
+      const fd = await fs.promises.open(filePath, "r+");
       await fd.close();
-      return true; // File is not locked
+      return true;
     } catch (error) {
-      if (error.code === 'EBUSY' || error.code === 'ENOENT') {
-        // File is busy or doesn't exist, wait a bit
-        await new Promise(resolve => setTimeout(resolve, 500));
+      if (error.code === "EBUSY" || error.code === "ENOENT") {
+        await new Promise((resolve) => setTimeout(resolve, 500));
         continue;
       }
-      // Other errors, assume file is available
       return true;
     }
   }
-  
+
   console.warn(`⚠️ File may still be locked: ${filePath}`);
   return false;
 }
@@ -130,7 +124,6 @@ async function gitPush() {
     for (const file of filesToPush) {
       const fullPath = path.join(WATCH_FOLDER, file);
       if (await verifyFileExists(fullPath)) {
-        // Wait for file to be released before processing
         await waitForFileRelease(fullPath);
         existingFiles.push(file);
       } else {
@@ -143,7 +136,6 @@ async function gitPush() {
       return;
     }
 
-    // Add files to git
     for (const file of existingFiles) {
       try {
         const fullPath = path.join(WATCH_FOLDER, file);
@@ -154,7 +146,6 @@ async function gitPush() {
       }
     }
 
-    // Force commit even if Git thinks there are no changes
     try {
       const statusOutput = await executeCommand(
         "git status --porcelain",
@@ -162,7 +153,6 @@ async function gitPush() {
       );
       if (!statusOutput.trim()) {
         console.log("ℹ️ Git reports no changes, but forcing commit anyway...");
-        // Force add the file again to ensure it's staged
         for (const file of existingFiles) {
           const fullPath = path.join(WATCH_FOLDER, file);
           await executeCommand(`git add -f "${fullPath}"`, WATCH_FOLDER);
@@ -172,16 +162,16 @@ async function gitPush() {
       console.error(`❌ Error checking Git status: ${statusError.message}`);
     }
 
-    // Force commit - always create a commit when files are detected
     const commitMessage = `Update saves: ${existingFiles.join(
       ", "
     )} - ${new Date().toISOString()}`;
     console.log(`📝 Force committing with message: "${commitMessage}"`);
-    
-    // Always use --allow-empty to ensure commit happens
-    await executeCommand(`git commit --allow-empty -m "${commitMessage}"`, WATCH_FOLDER);
 
-    // Push to remote
+    await executeCommand(
+      `git commit --allow-empty -m "${commitMessage}"`,
+      WATCH_FOLDER
+    );
+
     console.log("🚀 Pushing to origin/main...");
     await executeCommand("git push origin main", WATCH_FOLDER);
     console.log(`✅ Push complete for: ${existingFiles.join(", ")}`);

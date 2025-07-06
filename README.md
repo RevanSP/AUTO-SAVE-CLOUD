@@ -1,63 +1,51 @@
 # 🕹️ PCSX2 Memory Card Auto Git Push
 
-Automatically back up your PCSX2 memory card (`.ps2`) files to a remote Git repository whenever they change. This script monitors your PCSX2 memory card folder and automatically commits and pushes save file changes to your Git repository.
+Automatically back up your PCSX2 memory card (`.ps2`) files to a remote Git repository whenever they change. This script monitors your PCSX2 memory card folder and automatically commits and pushes save file changes to your Git repository with intelligent batching and retry mechanisms.
 
 ---
 
 ## ✨ Features
 
-* 🔄 **Automatic Detection:** Watches for changes and additions to `.ps2` files in your memory card folder.
-* 📝 **Smart Filtering:** Only `.ps2` files are processed.
-* 🚀 **Auto Commit & Push:** Automatically commits and pushes changes to your remote repository.
-* 🔒 **Lock File Handling:** Removes Git lock files if present to prevent push failures.
-* 🌐 **Internet Check:** Verifies internet connection before starting.
-* 🛑 **Graceful Shutdown:** On exit (`Ctrl+C`), attempts to push any pending changes.
+* 🔄 **Automatic Detection:** Watches for changes and additions to `.ps2` files in your memory card folder
+* 📝 **Smart Filtering:** Only `.ps2` files are processed, ignoring Git files and temporary files
+* ⏱️ **Intelligent Batching:** Groups multiple rapid changes into single commits using a 5-second debounce delay
+* 🔄 **Retry Mechanism:** Automatically retries failed pushes up to 3 times with 2-second delays
+* 🔒 **Git Lock Handling:** Automatically removes Git lock files and performs lightweight cleanup
+* 🌐 **Internet Check:** Verifies internet connection before starting
+* 📁 **File Validation:** Ensures files exist and are not locked before processing
+* 🛑 **Graceful Shutdown:** On exit (`Ctrl+C`), attempts to push any pending changes
+* 🚀 **Force Commit:** Uses `--allow-empty` to ensure commits are created even when Git thinks there are no changes
 
 ---
 
 ## 📦 Installation
 
-1. **Place the Script**
+1. **Prerequisites**
+   - Node.js installed on your system
+   - Git configured with proper credentials for your repository
+   - PCSX2 memory card folder already set up
 
-   Save the script file (e.g., `script.js`) in your PCSX2 memory card folder (e.g., `C:\PCSX2\memcards`).
-
-2. **Install Bun**
-
-   If you don't already have Bun installed, you can install it via the official installer:
-
-   ```sh
-   curl -fsSL https://bun.sh/install | bash
+2. **Install Dependencies**
+   ```bash
+   npm install chokidar
    ```
 
-3. **Install Dependencies**
-
-   Inside the project folder, run:
-
-   ```sh
-   bun install
-   ```
-
-   This installs the `chokidar` dependency as listed in the `package.json`.
+3. **Place the Script**
+   Save the script file (e.g., `script.js`) in a convenient location (doesn't need to be in the memory card folder)
 
 ---
 
 ## ⚙️ Configuration
 
 1. **Set the Watch Folder**
-
-   By default, the script watches this path:
-
+   Update the path in the script to match your PCSX2 memory card folder:
    ```js
-   const WATCH_FOLDER = 'C:\\PCSX2\\memcards';
+   const WATCH_FOLDER = "C:\\PCSX2\\memcards";
    ```
 
-   If your memory card folder is different, update the value accordingly.
-
-2. **Initialize a Git Repository**
-
-   If not already done, initialize a Git repo in the memory card folder:
-
-   ```sh
+2. **Initialize Git Repository**
+   If not already done, initialize a Git repo in your memory card folder:
+   ```bash
    cd "C:\PCSX2\memcards"
    git init
    git remote add origin https://github.com/yourusername/your-repo.git
@@ -67,11 +55,9 @@ Automatically back up your PCSX2 memory card (`.ps2`) files to a remote Git repo
    git push -u origin main
    ```
 
-3. **Set Git Identity**
-
-   Configure your Git username and email (if not already done):
-
-   ```sh
+3. **Configure Git Identity**
+   Set your Git username and email if not already configured:
+   ```bash
    git config --global user.name "Your Name"
    git config --global user.email "your.email@example.com"
    ```
@@ -80,14 +66,14 @@ Automatically back up your PCSX2 memory card (`.ps2`) files to a remote Git repo
 
 ## ▶️ Running the Script
 
-Start the watcher using Bun:
-
-```sh
-bun script.js
+Start the watcher using Node.js:
+```bash
+node script.js
 ```
 
 ### Example Output:
 
+**On Startup:**
 ```
 🌐 Internet connected. Proceeding to start the script...
 📁 Initializing file watcher for PCSX2 saves...
@@ -95,90 +81,145 @@ bun script.js
 Starting PCSX2 save auto-push service.
 ```
 
-When a `.ps2` file is changed or added:
-
+**When Files Change:**
 ```
-📝 Queuing and forcing re-push: Mcd001.ps2
-🔄 Forcing re-push of 1 file(s): Mcd001.ps2
-🗑️ Running: git rm --cached "C:\PCSX2\memcards\Mcd001.ps2"
-➕ Re-adding: git add "C:\PCSX2\memcards\Mcd001.ps2"
-📝 Committing with message: "Force re-upload saves: Mcd001.ps2"
+📝 Queuing file: Mcd001.ps2
+⏰ Debounce period ended, processing queued files...
+🔄 Processing 1 file(s): Mcd001.ps2
+🧹 Performing lightweight Git cleanup...
+✅ Git updated from remote
+➕ Adding: Mcd001.ps2
+📝 Force committing with message: "Update saves: Mcd001.ps2 - 2025-07-06T10:30:00.000Z"
 🚀 Pushing to origin/main...
-✅ Force push complete for: Mcd001.ps2
+✅ Push complete for: Mcd001.ps2
 ```
 
-To stop the script, press `Ctrl+C`. If any changes are pending, it will attempt a final push before exiting.
+To stop the script, press `Ctrl+C`. Any pending changes will be processed before shutdown.
 
 ---
 
-## 🔍 How It Works (Detailed)
+## 🔍 How It Works
 
-1. **Internet Check**
-   Before starting, the script checks for an active internet connection by pinging `https://www.google.com`. If not connected, it exits.
+1. **Internet Connectivity Check**
+   The script first verifies internet connection by attempting to reach Google. If offline, it exits immediately.
 
-2. **File Watching**
-   Uses [`chokidar`](https://www.npmjs.com/package/chokidar) to monitor the folder for `.ps2` file changes or additions. Ignores hidden and Git files.
+2. **File System Monitoring**
+   Uses [`chokidar`](https://www.npmjs.com/package/chokidar) with polling mode to reliably detect changes to `.ps2` files. The watcher:
+   - Ignores hidden files, Git files, and temporary files
+   - Uses a 5-second stability threshold to ensure files are fully written
+   - Polls every 3 seconds for changes
 
-3. **Change Queue**
-   When a change is detected, the filename is added to a queue (`changeQueue`). The script immediately triggers a Git push operation (no batching/delays).
+3. **Change Queue System**
+   When changes are detected:
+   - Files are added to a queue (`changeQueue`)
+   - A 5-second debounce timer starts/resets
+   - When the timer expires, all queued files are processed together
 
 4. **Git Operations**
-   For each file:
+   For each batch of files:
+   - Performs lightweight Git cleanup (removes lock files, pulls latest changes)
+   - Validates each file exists and waits for file locks to release
+   - Adds files to Git staging area
+   - Creates a commit with timestamp and file list
+   - Pushes to `origin/main`
 
-   * Run `git rm --cached` to untrack the file.
-   * Run `git add` to re-track it.
-   * Commit with a message like: `Force re-upload saves: Mcd001.ps2`
-   * Push to `origin/main`.
+5. **Error Handling & Retries**
+   - Failed operations are retried up to 3 times with 2-second delays
+   - Git lock files are automatically removed
+   - Missing files are skipped with warnings
+   - Detailed error logging for troubleshooting
 
-   If `.git/index.lock` exists, it’s deleted to unblock the process.
-
-5. **Graceful Shutdown**
-   On `Ctrl+C`, if files are queued for push, the script completes one final push before exiting.
-
-6. **Error Handling**
-
-   * Git command errors are caught and logged.
-   * If `.git/index.lock` can’t be deleted, the push is skipped to prevent corruption.
+6. **Graceful Shutdown**
+   On `Ctrl+C`, the script processes any remaining queued files before exiting.
 
 ---
 
-## 🛠 Customization
+## 🛠 Customization Options
 
-* **Monitor Other File Types:**
-  Change the file extension check in `queueFile()`:
+### Timing Configuration
+```js
+const MAX_RETRIES = 3;           // Number of retry attempts
+const RETRY_DELAY = 2000;        // Delay between retries (ms)
+const DEBOUNCE_DELAY = 5000;     // Batching delay (ms)
+```
 
-  ```js
-  if (!fileName.endsWith('.ps2')) return;
-  ```
+### File Type Filtering
+Change the file extension check in `queueFile()`:
+```js
+if (!fileName.endsWith(".ps2")) {
+  // Add other extensions: .sav, .mcr, etc.
+  return;
+}
+```
 
-* **Add Batching (Optional):**
-  Implement a debounce or timeout before `gitPush()` to group multiple quick changes into one commit.
+### Commit Message Format
+Modify the commit message in `gitPush()`:
+```js
+const commitMessage = `Update saves: ${existingFiles.join(", ")} - ${new Date().toISOString()}`;
+```
 
-* **Edit Commit Messages:**
-  Change the format in the `gitPush()` function:
-
-  ```js
-  const commitMessage = `Force re-upload saves: ${filesToPush.join(', ')}`;
-  ```
+### Watcher Options
+Adjust the `chokidar` configuration:
+```js
+const watcher = chokidar.watch(WATCH_FOLDER, {
+  persistent: true,
+  usePolling: true,
+  interval: 3000,                    // Polling interval
+  ignoreInitial: true,
+  ignored: ["**/.git/**", "**/.*", "**/tmp_*"],
+  awaitWriteFinish: {
+    stabilityThreshold: 5000,        // Wait time for file stability
+    pollInterval: 500,
+  },
+});
+```
 
 ---
 
 ## ❗ Troubleshooting
 
-* **Authentication Issues:**
-  Ensure Git credentials are configured properly. Use SSH keys or a credential helper for HTTPS.
+### Common Issues
 
-* **Permission Errors:**
-  Run the script as administrator if accessing protected folders.
+**"No internet connection detected"**
+- Ensure you have an active internet connection
+- Check if firewall is blocking the script
+- Try running as administrator
 
-* **No Internet Detected:**
-  The script won’t run if offline. Ensure you're connected to the internet.
+**"Git lock file removed" messages**
+- This is normal - the script automatically handles Git lock files
+- If persistent, ensure no other Git operations are running
 
-* **Git Lock File Exists:**
-  The script will attempt to auto-remove it. If it fails, remove `.git/index.lock` manually.
+**"File not found, skipping"**
+- PCSX2 might be using temporary files during save operations
+- The script waits for file stability before processing
+
+**Authentication errors**
+- Configure Git credentials: `git config --global credential.helper store`
+- Or use SSH keys for authentication
+- Ensure your repository remote URL is correct
+
+**Permission denied errors**
+- Run the script as administrator
+- Check folder permissions for the memory card directory
+
+### Debug Information
+The script provides detailed logging for troubleshooting:
+- File queue operations
+- Git command execution
+- Error messages with context
+- Retry attempts and status
+
+---
+
+## 📊 Performance Notes
+
+- **Polling Mode:** Uses file system polling for reliability across different systems
+- **Debounce Batching:** Groups rapid changes to avoid excessive commits
+- **File Lock Detection:** Waits for files to be fully written before processing
+- **Lightweight Operations:** Minimal Git operations to reduce overhead
 
 ---
 
 ## 📝 License
 
-This project is free and open-source. You’re welcome to use, modify, and distribute it as needed.
+This project is free and open-source. You're welcome to use, modify, and distribute it as needed.
