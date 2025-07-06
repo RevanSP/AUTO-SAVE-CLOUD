@@ -21,7 +21,7 @@ Automatically back up your PCSX2 memory card (`.ps2`) files to a remote Git repo
 ## 📦 Installation
 
 1. **Prerequisites**
-   - Node.js installed on your system
+   - Bun installed on your system
    - Git configured with proper credentials for your repository
    - PCSX2 memory card folder already set up
 
@@ -66,9 +66,9 @@ Automatically back up your PCSX2 memory card (`.ps2`) files to a remote Git repo
 
 ## ▶️ Running the Script
 
-Start the watcher using Node.js:
+Start the watcher using Bun:
 ```bash
-node script.js
+bun script.js
 ```
 
 ### Example Output:
