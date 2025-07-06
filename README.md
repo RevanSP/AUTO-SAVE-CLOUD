@@ -27,7 +27,7 @@ Automatically back up your PCSX2 memory card (`.ps2`) files to a remote Git repo
 
 2. **Install Dependencies**
    ```bash
-   npm install chokidar
+   bun add chokidar
    ```
 
 3. **Place the Script**
