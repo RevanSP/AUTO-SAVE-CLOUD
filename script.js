@@ -50,10 +50,11 @@ async function executeCommand(command, cwd) {
   });
 }
 
-async function cleanupGitState() {
-  console.log("🧹 Cleaning up Git state...");
+async function lightweightGitCleanup() {
+  console.log("🧹 Performing lightweight Git cleanup...");
   const lockFile = path.join(WATCH_FOLDER, ".git", "index.lock");
 
+  // Remove lock file if it exists
   if (fs.existsSync(lockFile)) {
     try {
       fs.unlinkSync(lockFile);
@@ -64,21 +65,12 @@ async function cleanupGitState() {
   }
 
   try {
-    await executeCommand("git reset --hard", WATCH_FOLDER);
-
-    await executeCommand("git clean -fd", WATCH_FOLDER);
-
+    // Just pull latest changes without aggressive reset
     await executeCommand("git pull origin main", WATCH_FOLDER);
-
-    console.log("✅ Git state cleaned up");
+    console.log("✅ Git updated from remote");
   } catch (error) {
-    console.error(`❌ Error during Git cleanup: ${error.message}`);
-    try {
-      await executeCommand("git gc --prune=now", WATCH_FOLDER);
-      await executeCommand("git fsck --full", WATCH_FOLDER);
-    } catch (gcError) {
-      console.error(`❌ Git recovery failed: ${gcError.message}`);
-    }
+    console.warn(`⚠️ Git pull failed: ${error.message}`);
+    // Don't fail completely, just continue
   }
 }
 
@@ -89,6 +81,30 @@ async function verifyFileExists(filePath) {
   } catch (error) {
     return false;
   }
+}
+
+async function waitForFileRelease(filePath, maxWaitTime = 10000) {
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < maxWaitTime) {
+    try {
+      // Try to open the file for writing to check if it's locked
+      const fd = await fs.promises.open(filePath, 'r+');
+      await fd.close();
+      return true; // File is not locked
+    } catch (error) {
+      if (error.code === 'EBUSY' || error.code === 'ENOENT') {
+        // File is busy or doesn't exist, wait a bit
+        await new Promise(resolve => setTimeout(resolve, 500));
+        continue;
+      }
+      // Other errors, assume file is available
+      return true;
+    }
+  }
+  
+  console.warn(`⚠️ File may still be locked: ${filePath}`);
+  return false;
 }
 
 async function gitPush() {
@@ -108,12 +124,14 @@ async function gitPush() {
   );
 
   try {
-    await cleanupGitState();
+    await lightweightGitCleanup();
 
     const existingFiles = [];
     for (const file of filesToPush) {
       const fullPath = path.join(WATCH_FOLDER, file);
       if (await verifyFileExists(fullPath)) {
+        // Wait for file to be released before processing
+        await waitForFileRelease(fullPath);
         existingFiles.push(file);
       } else {
         console.log(`⚠️ File not found, skipping: ${file}`);
@@ -125,12 +143,18 @@ async function gitPush() {
       return;
     }
 
+    // Add files to git
     for (const file of existingFiles) {
-      const fullPath = path.join(WATCH_FOLDER, file);
-      console.log(`➕ Adding: ${file}`);
-      await executeCommand(`git add "${fullPath}"`, WATCH_FOLDER);
+      try {
+        const fullPath = path.join(WATCH_FOLDER, file);
+        console.log(`➕ Adding: ${file}`);
+        await executeCommand(`git add "${fullPath}"`, WATCH_FOLDER);
+      } catch (addError) {
+        console.warn(`⚠️ Failed to add ${file}: ${addError.message}`);
+      }
     }
 
+    // Check if there are actually changes to commit
     try {
       const statusOutput = await executeCommand(
         "git status --porcelain",
@@ -144,12 +168,14 @@ async function gitPush() {
       console.error(`❌ Error checking Git status: ${statusError.message}`);
     }
 
+    // Commit changes
     const commitMessage = `Update saves: ${existingFiles.join(
       ", "
     )} - ${new Date().toISOString()}`;
     console.log(`📝 Committing with message: "${commitMessage}"`);
     await executeCommand(`git commit -m "${commitMessage}"`, WATCH_FOLDER);
 
+    // Push to remote
     console.log("🚀 Pushing to origin/main...");
     await executeCommand("git push origin main", WATCH_FOLDER);
     console.log(`✅ Push complete for: ${existingFiles.join(", ")}`);
