@@ -172,22 +172,14 @@ async function gitPush() {
       console.error(`❌ Error checking Git status: ${statusError.message}`);
     }
 
-    // Commit changes (force commit with --allow-empty if needed)
+    // Force commit - always create a commit when files are detected
     const commitMessage = `Update saves: ${existingFiles.join(
       ", "
     )} - ${new Date().toISOString()}`;
-    console.log(`📝 Committing with message: "${commitMessage}"`);
+    console.log(`📝 Force committing with message: "${commitMessage}"`);
     
-    try {
-      await executeCommand(`git commit -m "${commitMessage}"`, WATCH_FOLDER);
-    } catch (commitError) {
-      if (commitError.message.includes("nothing to commit")) {
-        console.log("🔄 No changes detected, creating empty commit to trigger push...");
-        await executeCommand(`git commit --allow-empty -m "${commitMessage}"`, WATCH_FOLDER);
-      } else {
-        throw commitError;
-      }
-    }
+    // Always use --allow-empty to ensure commit happens
+    await executeCommand(`git commit --allow-empty -m "${commitMessage}"`, WATCH_FOLDER);
 
     // Push to remote
     console.log("🚀 Pushing to origin/main...");
