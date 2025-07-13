@@ -14,6 +14,12 @@ let batchTimeout = null;
 let isPushing = false;
 let retryCount = 0;
 
+function getLocalizedTimestamp() {
+  const now = new Date();
+  const localizedDateTime = now.toLocaleString();
+  return localizedDateTime;
+}
+
 function checkInternetConnection(callback) {
   https
     .get("https://www.google.com", (res) => {
@@ -162,9 +168,10 @@ async function gitPush() {
       console.error(`❌ Error checking Git status: ${statusError.message}`);
     }
 
+    const localTimestamp = getLocalizedTimestamp();
     const commitMessage = `Update saves: ${existingFiles.join(
       ", "
-    )} - ${new Date().toISOString()}`;
+    )} - ${localTimestamp}`;
     console.log(`📝 Force committing with message: "${commitMessage}"`);
 
     await executeCommand(
